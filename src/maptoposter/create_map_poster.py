@@ -193,18 +193,23 @@ def get_edge_widths_by_type(G):
     
     return edge_widths
 
-def get_coordinates(city, country):
+def get_coordinates(city, country, state=None):
     """
     Fetches coordinates for a given city and country using geopy.
     Includes rate limiting to be respectful to the geocoding service.
     """
     print("Looking up coordinates...")
     geolocator = Nominatim(user_agent="city_map_poster")
-    
+
     # Add a small delay to respect Nominatim's usage policy
     time.sleep(1)
-    
-    location = geolocator.geocode(f"{city}, {country}")
+
+    if state:
+        query = f"{city}, {state}, {country}"
+    else:
+        query = f"{city}, {country}"
+
+    location = geolocator.geocode(query)
     
     if location:
         print(f"✓ Found: {location.address}")
@@ -335,6 +340,10 @@ Examples:
   # Iconic grid patterns
   python create_map_poster.py -c "New York" -C "USA" -t noir -d 12000           # Manhattan grid
   python create_map_poster.py -c "Barcelona" -C "Spain" -t warm_beige -d 8000   # Eixample district grid
+
+  # With state/province for disambiguation
+  python create_map_poster.py -c "Portland" -s "Oregon" -C "USA" -t ocean -d 8000
+  python create_map_poster.py -c "Vancouver" -s "British Columbia" -C "Canada" -t forest -d 10000
   
   # Waterfront & canals
   python create_map_poster.py -c "Venice" -C "Italy" -t blueprint -d 4000       # Canal network
@@ -364,6 +373,7 @@ Examples:
 
 Options:
   --city, -c        City name (required)
+  --state, -s       State or province (optional)
   --country, -C     Country name (required)
   --theme, -t       Theme name (default: feature_based)
   --distance, -d    Map radius in meters (default: 29000)
@@ -403,7 +413,8 @@ def list_themes():
             print(f"    {description}")
         print()
 
-if __name__ == "__main__":
+def main():
+    global THEME
     parser = argparse.ArgumentParser(
         description="Generate beautiful map posters for any city",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -417,28 +428,37 @@ Examples:
     )
     
     parser.add_argument('--city', '-c', type=str, help='City name')
+    parser.add_argument('--state', '-s', type=str, help='State or province (optional)')
     parser.add_argument('--country', '-C', type=str, help='Country name')
     parser.add_argument('--theme', '-t', type=str, default='feature_based', help='Theme name (default: feature_based)')
     parser.add_argument('--distance', '-d', type=int, default=29000, help='Map radius in meters (default: 29000)')
     parser.add_argument('--list-themes', action='store_true', help='List all available themes')
     
     args = parser.parse_args()
-    
-    # If no arguments provided, show examples
-    if len(os.sys.argv) == 1:
-        print_examples()
-        os.sys.exit(0)
-    
+
     # List themes if requested
     if args.list_themes:
         list_themes()
         os.sys.exit(0)
-    
-    # Validate required arguments
+
+    # Interactive mode if no city/country provided
     if not args.city or not args.country:
-        print("Error: --city and --country are required.\n")
-        print_examples()
-        os.sys.exit(1)
+        print("=" * 50)
+        print("City Map Poster Generator")
+        print("=" * 50)
+        print()
+        if not args.city:
+            args.city = input("City: ").strip()
+        if not args.city:
+            print("Error: City is required.")
+            os.sys.exit(1)
+        if not args.state:
+            args.state = input("State/Province (optional, press Enter to skip): ").strip() or None
+        if not args.country:
+            args.country = input("Country: ").strip()
+        if not args.country:
+            print("Error: Country is required.")
+            os.sys.exit(1)
     
     # Validate theme exists
     available_themes = get_available_themes()
@@ -446,17 +466,19 @@ Examples:
         print(f"Error: Theme '{args.theme}' not found.")
         print(f"Available themes: {', '.join(available_themes)}")
         os.sys.exit(1)
-    
-    print("=" * 50)
-    print("City Map Poster Generator")
-    print("=" * 50)
+
+    # Print header if we didn't already in interactive mode
+    if len(os.sys.argv) > 1:
+        print("=" * 50)
+        print("City Map Poster Generator")
+        print("=" * 50)
     
     # Load theme
     THEME = load_theme(args.theme)
     
     # Get coordinates and generate poster
     try:
-        coords = get_coordinates(args.city, args.country)
+        coords = get_coordinates(args.city, args.country, args.state)
         output_file = generate_output_filename(args.city, args.theme)
         create_poster(args.city, args.country, coords, args.distance, output_file)
         
@@ -469,3 +491,7 @@ Examples:
         import traceback
         traceback.print_exc()
         os.sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
